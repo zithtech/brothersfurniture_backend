@@ -1,11 +1,15 @@
 import { pool } from './pool.js'
 import { runMigrations } from './migrate.js'
 import { seedDatabase } from './seed.js'
+import { migrateAndSeedCustomers } from '../scripts/migrateAndSeedCustomers.js'
 
 export async function initDB() {
   try {
     console.log('Initializing PostgreSQL database...')
     await runMigrations()
+
+    // Ensure customer management tables
+    await migrateAndSeedCustomers()
 
     // Check if products table has rows
     const res = await pool.query('SELECT COUNT(*) FROM products')
