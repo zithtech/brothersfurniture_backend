@@ -183,6 +183,55 @@ export async function uploadImageBufferToR2(params: {
 }
 
 /**
+ * Uploads a PDF buffer directly to Cloudflare R2
+ */
+export async function uploadPdfBufferToR2(params: {
+  buffer: Buffer
+  originalName: string
+  folder?: string
+  proposalId?: string
+  invoiceId?: string
+}): Promise<UploadResult> {
+  const { buffer, originalName, folder = 'proposals', proposalId, invoiceId } = params
+
+  const cleanName = (originalName || 'document')
+    .replace(/\.[^/.]+$/, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .slice(0, 40)
+
+  const timestamp = Date.now()
+  const fileName = `${timestamp}_${cleanName}.pdf`
+  const targetId = invoiceId || proposalId
+  const subFolder = targetId ? targetId.replace(/[^a-zA-Z0-9_-]/g, '_') : 'general'
+  const key = `${folder}/${subFolder}/${fileName}`
+
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: 'application/pdf',
+      CacheControl: 'public, max-age=31536000, immutable',
+      Metadata: {
+        'original-name': encodeURIComponent(originalName || ''),
+        'uploaded-at': new Date().toISOString(),
+      },
+    })
+  )
+
+  const baseUrl = getR2PublicBaseUrl()
+  const publicUrl = `${baseUrl}/${key}`
+
+  return {
+    url: publicUrl,
+    key,
+    size: buffer.length,
+    mimeType: 'application/pdf',
+    originalName,
+  }
+}
+
+/**
  * Deletes an object from Cloudflare R2
  */
 export async function deleteObjectFromR2(key: string): Promise<boolean> {

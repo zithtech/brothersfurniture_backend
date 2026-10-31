@@ -14,6 +14,8 @@ import { settingsRouter } from './routes/settings.js'
 import { syncRouter } from './routes/sync.js'
 import { authRouter } from './routes/auth.js'
 import { uploadRouter } from './routes/upload.js'
+import { proposalsRouter } from './routes/proposals.js'
+import { invoicesRouter } from './routes/invoices.js'
 import { customersRouter } from './routes/customers.js'
 
 const app = express()
@@ -64,6 +66,8 @@ app.get('/', (_req, res) => {
       settings: '/api/settings',
       sync: '/api/sync',
       upload: '/api/upload',
+      proposals: '/api/proposals',
+      invoices: '/api/invoices',
     },
     connectedUrls: {
       frontend: config.frontendUrl,
@@ -86,6 +90,8 @@ app.use('/api/settings', settingsRouter)
 app.use('/api/sync', syncRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/upload', uploadRouter)
+app.use('/api/proposals', proposalsRouter)
+app.use('/api/invoices', invoicesRouter)
 
 // Global Error Handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

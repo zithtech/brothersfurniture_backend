@@ -24,8 +24,8 @@ settingsRouter.put('/', async (req, res) => {
       INSERT INTO company_settings (
         id, name, address_lines, phones, email, whatsapp, map,
         gstin, factory_location, free_delivery_threshold, standard_delivery_fee,
-        banner_announcement, is_banner_active, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+        banner_announcement, is_banner_active, bank_accounts, signature_url, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
       ON CONFLICT (id) DO UPDATE SET
         name = COALESCE($2, company_settings.name),
         address_lines = COALESCE($3, company_settings.address_lines),
@@ -39,6 +39,8 @@ settingsRouter.put('/', async (req, res) => {
         standard_delivery_fee = COALESCE($11, company_settings.standard_delivery_fee),
         banner_announcement = COALESCE($12, company_settings.banner_announcement),
         is_banner_active = COALESCE($13, company_settings.is_banner_active),
+        bank_accounts = COALESCE($14, company_settings.bank_accounts),
+        signature_url = CASE WHEN $15 = '__CLEAR__' THEN NULL WHEN $15 IS NOT NULL THEN $15 ELSE company_settings.signature_url END,
         updated_at = NOW()
       RETURNING *
     `
@@ -56,6 +58,8 @@ settingsRouter.put('/', async (req, res) => {
       s.standardDeliveryFee,
       s.bannerAnnouncement,
       s.isBannerActive,
+      s.bankAccounts !== undefined ? JSON.stringify(s.bankAccounts) : null,
+      s.signatureUrl === null || s.signatureUrl === '' ? '__CLEAR__' : (s.signatureUrl !== undefined ? s.signatureUrl : null),
     ]
 
     const result = await pool.query(queryStr, values)

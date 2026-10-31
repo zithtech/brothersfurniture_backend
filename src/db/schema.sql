@@ -133,6 +133,8 @@ CREATE TABLE IF NOT EXISTS company_settings (
   standard_delivery_fee NUMERIC(12,2) DEFAULT 1500,
   banner_announcement TEXT,
   is_banner_active BOOLEAN DEFAULT TRUE,
+  bank_accounts JSONB NOT NULL DEFAULT '[]'::jsonb,
+  signature_url TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -172,3 +174,89 @@ CREATE TABLE IF NOT EXISTS admin_refresh_tokens (
   revoked BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Commercial Proposals
+CREATE TABLE IF NOT EXISTS proposals (
+  id VARCHAR(100) PRIMARY KEY,
+  proposal_number VARCHAR(100) UNIQUE NOT NULL,
+  title VARCHAR(255),
+  customer_name VARCHAR(255),
+  company_name VARCHAR(255),
+  phone VARCHAR(50),
+  email VARCHAR(255),
+  client_gstin VARCHAR(50),
+  delivery_address TEXT,
+  status VARCHAR(50) NOT NULL DEFAULT 'draft',
+  valid_until VARCHAR(50),
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+  discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  delivery_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total NUMERIC(12,2) NOT NULL DEFAULT 0,
+  terms TEXT,
+  notes TEXT,
+  pdf_url TEXT,
+  r2_key TEXT,
+  converted_invoice_id VARCHAR(100),
+  prepared_for VARCHAR(255),
+  client_phone VARCHAR(50),
+  client_address TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS r2_key TEXT;
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS prepared_for VARCHAR(255);
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS client_phone VARCHAR(50);
+ALTER TABLE proposals ADD COLUMN IF NOT EXISTS client_address TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_proposals_status ON proposals(status);
+CREATE INDEX IF NOT EXISTS idx_proposals_proposal_number ON proposals(proposal_number);
+
+-- GST Tax Invoices
+CREATE TABLE IF NOT EXISTS invoices (
+  id VARCHAR(100) PRIMARY KEY,
+  invoice_number VARCHAR(100) UNIQUE NOT NULL,
+  proposal_ref VARCHAR(100),
+  customer_name VARCHAR(255) NOT NULL,
+  company_name VARCHAR(255),
+  phone VARCHAR(50) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  client_gstin VARCHAR(50),
+  billing_address TEXT NOT NULL,
+  shipping_address TEXT NOT NULL,
+  po_number VARCHAR(100),
+  issue_date VARCHAR(50) NOT NULL,
+  due_date VARCHAR(50) NOT NULL,
+  status VARCHAR(50) NOT NULL DEFAULT 'pending',
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+  discount_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  delivery_fee NUMERIC(12,2) NOT NULL DEFAULT 0,
+  cgst_rate NUMERIC(5,2) NOT NULL DEFAULT 9.0,
+  cgst_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  sgst_rate NUMERIC(5,2) NOT NULL DEFAULT 9.0,
+  sgst_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tax_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total NUMERIC(12,2) NOT NULL DEFAULT 0,
+  amount_paid NUMERIC(12,2) NOT NULL DEFAULT 0,
+  balance_due NUMERIC(12,2) NOT NULL DEFAULT 0,
+  payment_records JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes TEXT,
+  pdf_url TEXT,
+  r2_key TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number);
+CREATE INDEX IF NOT EXISTS idx_invoices_proposal_ref ON invoices(proposal_ref);
+
+-- Ensure non-destructive migrations for existing databases
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS bank_accounts JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS signature_url TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS pdf_url TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS r2_key TEXT;
+
