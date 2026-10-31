@@ -16,6 +16,7 @@ import { authRouter } from './routes/auth.js'
 import { uploadRouter } from './routes/upload.js'
 import { proposalsRouter } from './routes/proposals.js'
 import { invoicesRouter } from './routes/invoices.js'
+import { customersRouter } from './routes/customers.js'
 
 const app = express()
 
@@ -59,6 +60,7 @@ app.get('/', (_req, res) => {
       chairs: '/api/chairs',
       leads: '/api/leads',
       orders: '/api/orders',
+      customers: '/api/customers',
       clients: '/api/clients',
       testimonials: '/api/testimonials',
       settings: '/api/settings',
@@ -81,6 +83,7 @@ app.use('/api/products', productsRouter)
 app.use('/api/chairs', chairsRouter)
 app.use('/api/leads', leadsRouter)
 app.use('/api/orders', ordersRouter)
+app.use('/api/customers', customersRouter)
 app.use('/api/clients', clientsRouter)
 app.use('/api/testimonials', testimonialsRouter)
 app.use('/api/settings', settingsRouter)

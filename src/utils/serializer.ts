@@ -244,3 +244,126 @@ export function mapInvoice(row: any) {
   }
 }
 
+export function mapCustomerContact(row: any) {
+  if (!row) return null
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    name: row.name,
+    designation: row.designation,
+    email: row.email,
+    phone: row.phone,
+    isPrimary: Boolean(row.is_primary),
+    department: row.department,
+    notes: row.notes,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+  }
+}
+
+export function mapCustomerAddress(row: any) {
+  if (!row) return null
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    addressType: row.address_type,
+    isDefault: Boolean(row.is_default),
+    addressLine1: row.address_line1,
+    addressLine2: row.address_line2,
+    city: row.city,
+    state: row.state,
+    country: row.country || 'India',
+    pinCode: row.pin_code,
+    mapLocation: row.map_location,
+    latitude: row.latitude ? parseFloat(row.latitude) : null,
+    longitude: row.longitude ? parseFloat(row.longitude) : null,
+    landmark: row.landmark,
+    contactPerson: row.contact_person,
+    contactPhone: row.contact_phone,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+  }
+}
+
+export function mapCustomerNote(row: any) {
+  if (!row) return null
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    note: row.note,
+    category: row.category || 'General',
+    authorName: row.author_name || 'Admin',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+  }
+}
+
+export function mapCustomerActivityLog(row: any) {
+  if (!row) return null
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    action: row.action,
+    description: row.description,
+    actorName: row.actor_name || 'Admin',
+    metadata: typeof row.metadata === 'object' ? row.metadata : JSON.parse(row.metadata || '{}'),
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+  }
+}
+
+export function mapCustomer(row: any, extra?: { contacts?: any[]; addresses?: any[]; notes?: any[]; activityLogs?: any[]; orders?: any[] }) {
+  if (!row) return null
+  return {
+    id: row.id,
+    customerCode: row.customer_code,
+    companyName: row.company_name,
+    companyPhone: row.company_phone,
+    companyEmail: row.company_email,
+    gstNumber: row.gst_number,
+    websiteUrl: row.website_url,
+    companySize: row.company_size || 'Medium',
+    category: row.category || 'Corporate',
+    status: row.status || 'active',
+    customerType: row.customer_type || 'B2B',
+    gstType: row.gst_type || 'Regular',
+    paymentTerms: row.payment_terms || 'Net 30',
+    creditLimit: row.credit_limit ? parseFloat(row.credit_limit) : 0,
+    customerSource: row.customer_source || 'Direct',
+    accountManager: row.account_manager,
+    internalNotes: row.internal_notes,
+    internalRemarks: row.internal_remarks,
+    createdBy: row.created_by || 'Admin',
+    updatedBy: row.updated_by || 'Admin',
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : new Date().toISOString(),
+    deletedAt: row.deleted_at ? new Date(row.deleted_at).toISOString() : null,
+
+    // Primary contact summary for list view
+    primaryContact: row.primary_contact_name
+      ? {
+          name: row.primary_contact_name,
+          designation: row.primary_contact_designation,
+          phone: row.primary_contact_phone,
+          email: row.primary_contact_email,
+        }
+      : undefined,
+
+    // Primary address summary for list view
+    primaryAddress: row.primary_city
+      ? {
+          city: row.primary_city,
+          state: row.primary_state,
+          country: row.primary_country,
+          pinCode: row.primary_pin_code,
+          addressLine1: row.primary_address_line1,
+          mapLocation: row.primary_map_location,
+        }
+      : undefined,
+
+    // Detailed relation arrays
+    contacts: extra?.contacts ? extra.contacts.map(mapCustomerContact).filter(Boolean) : undefined,
+    addresses: extra?.addresses ? extra.addresses.map(mapCustomerAddress).filter(Boolean) : undefined,
+    notes: extra?.notes ? extra.notes.map(mapCustomerNote).filter(Boolean) : undefined,
+    activityLogs: extra?.activityLogs ? extra.activityLogs.map(mapCustomerActivityLog).filter(Boolean) : undefined,
+    orders: extra?.orders || undefined,
+  }
+}
