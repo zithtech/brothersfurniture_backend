@@ -191,6 +191,7 @@ export function mapProposal(row: any) {
     validUntil: row.valid_until || 'Within 30 Days',
     items: Array.isArray(row.items) ? row.items : (typeof row.items === 'string' ? JSON.parse(row.items) : []),
     subtotal,
+    discountPercent: row.discount_percent != null ? parseFloat(row.discount_percent) : (subtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / subtotal) * 100) : 0),
     discountAmount,
     deliveryFee,
     taxRate: 18,

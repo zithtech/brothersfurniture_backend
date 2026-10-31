@@ -246,23 +246,57 @@ proposalsRouter.delete('/:id', async (req, res) => {
 // Convert Proposal to Tax Invoice (1-Click)
 proposalsRouter.post('/:id/convert-to-invoice', async (req, res) => {
   try {
-    const propRes = await pool.query('SELECT * FROM proposals WHERE id = $1', [req.params.id])
+    let propRes = await pool.query('SELECT * FROM proposals WHERE id = $1', [req.params.id])
     if (propRes.rows.length === 0) {
+      // Retry in case proposal was just created concurrently
+      for (let i = 0; i < 3; i++) {
+        await new Promise((r) => setTimeout(r, 400))
+        propRes = await pool.query('SELECT * FROM proposals WHERE id = $1', [req.params.id])
+        if (propRes.rows.length > 0) break
+      }
+    }
+
+    let proposal = propRes.rows.length > 0 ? mapProposal(propRes.rows[0]) : null
+
+    // If proposal was not in db yet but client provided fallback in body
+    if (!proposal && req.body && (req.body.proposalRef || req.body.customerName || req.body.items)) {
+      const p = req.body
+      proposal = {
+        id: req.params.id,
+        proposalNumber: p.proposalRef || p.proposalNumber || 'BF-PROP-2026-0001',
+        title: p.title || 'Commercial Proposal',
+        customerName: p.customerName || 'Direct Commercial Client',
+        companyName: p.companyName || '',
+        phone: p.phone || '',
+        email: p.email || '',
+        clientGstin: p.clientGstin || '',
+        deliveryAddress: p.billingAddress || p.shippingAddress || p.deliveryAddress || '',
+        status: 'converted',
+        subtotal: Number(p.subtotal) || 0,
+        discountAmount: Number(p.discountAmount) || 0,
+        deliveryFee: Number(p.deliveryFee) || 0,
+        total: Number(p.total) || 0,
+        items: Array.isArray(p.items) ? p.items : [],
+        notes: p.notes || '',
+        createdAt: new Date().toISOString(),
+      } as any
+    }
+
+    if (!proposal) {
       return res.status(404).json({ error: 'Proposal not found' })
     }
 
-    const proposal = mapProposal(propRes.rows[0])!
     const invCountRes = await pool.query('SELECT COUNT(*) FROM invoices')
     const nextInvNum = String(parseInt(invCountRes.rows[0].count, 10) + 1).padStart(3, '0')
-    const invoiceNumber = `BF-INV-2026-${nextInvNum}`
+    const invoiceNumber = req.body?.invoiceNumber || `BF-INV-2026-${nextInvNum}`
+    const invId = req.body?.id || `inv-${Date.now()}`
 
     const taxableSubtotal = Math.max(0, proposal.subtotal - (proposal.discountAmount || 0))
-    const cgstAmount = Math.round(taxableSubtotal * 0.09)
-    const sgstAmount = Math.round(taxableSubtotal * 0.09)
+    const cgstAmount = req.body?.cgstAmount !== undefined ? Number(req.body.cgstAmount) : Math.round(taxableSubtotal * 0.09)
+    const sgstAmount = req.body?.sgstAmount !== undefined ? Number(req.body.sgstAmount) : Math.round(taxableSubtotal * 0.09)
     const totalTax = cgstAmount + sgstAmount
-    const grandTotal = taxableSubtotal + proposal.deliveryFee + totalTax
+    const grandTotal = req.body?.total !== undefined ? Number(req.body.total) : (taxableSubtotal + proposal.deliveryFee + totalTax)
 
-    const invId = `inv-${Date.now()}`
     const invoiceQuery = `
       INSERT INTO invoices (
         id, invoice_number, proposal_ref, customer_name, company_name, phone,
@@ -277,58 +311,81 @@ proposalsRouter.post('/:id/convert-to-invoice', async (req, res) => {
         $18, $19, $20, $21, $22, $23,
         $24, $25, $26, $27, NOW(), NOW()
       )
+      ON CONFLICT (id) DO UPDATE SET
+        customer_name = EXCLUDED.customer_name,
+        company_name = EXCLUDED.company_name,
+        items = EXCLUDED.items,
+        subtotal = EXCLUDED.subtotal,
+        discount_amount = EXCLUDED.discount_amount,
+        delivery_fee = EXCLUDED.delivery_fee,
+        total = EXCLUDED.total,
+        balance_due = EXCLUDED.balance_due,
+        updated_at = NOW()
       RETURNING *
     `
     const invoiceValues = [
       invId,
       invoiceNumber,
       proposal.proposalNumber,
-      proposal.customerName || 'Direct Commercial Client',
-      proposal.companyName || null,
-      proposal.phone || '',
-      proposal.email || '',
-      proposal.clientGstin || null,
-      proposal.deliveryAddress || 'Client Office Address',
-      proposal.deliveryAddress || 'Client Office Address',
-      new Date().toISOString().split('T')[0],
-      new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      'pending',
-      JSON.stringify(proposal.items.map((it: any, idx: number) => ({
-        id: `iitem-${Date.now()}-${idx}`,
-        productId: it.productId,
-        name: it.name,
-        hsnCode: '9403',
-        image: it.image,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        material: it.material,
-        dimensions: it.dimensions,
-        sku: it.sku,
-        total: it.total,
-      }))),
+      req.body?.customerName || proposal.customerName || 'Direct Commercial Client',
+      req.body?.companyName !== undefined ? req.body.companyName : (proposal.companyName || null),
+      req.body?.phone !== undefined ? req.body.phone : (proposal.phone || ''),
+      req.body?.email !== undefined ? req.body.email : (proposal.email || ''),
+      req.body?.clientGstin !== undefined ? req.body.clientGstin : (proposal.clientGstin || null),
+      req.body?.billingAddress || proposal.deliveryAddress || 'Client Office Address',
+      req.body?.shippingAddress || proposal.deliveryAddress || 'Client Office Address',
+      req.body?.issueDate || new Date().toISOString().split('T')[0],
+      req.body?.dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      req.body?.status || 'pending',
+      JSON.stringify(req.body?.items || proposal.items.map((it: any, idx: number) => {
+        const itemDiscPct = it.discountPercent !== undefined && Number(it.discountPercent) > 0
+          ? Number(it.discountPercent)
+          : ((proposal as any).discountPercent ? Number((proposal as any).discountPercent) : 0)
+        const gross = (Number(it.quantity) || 1) * (Number(it.unitPrice) || 0)
+        const itemDiscAmt = it.discountAmount !== undefined && Number(it.discountAmount) > 0
+          ? Number(it.discountAmount)
+          : (itemDiscPct > 0 ? Math.round((gross * itemDiscPct) / 100) : 0)
+        const itemTot = it.total !== undefined ? Number(it.total) : Math.max(0, gross - itemDiscAmt)
+
+        return {
+          id: it.id || `iitem-${Date.now()}-${idx}`,
+          productId: it.productId,
+          name: it.name,
+          hsnCode: it.hsnCode || '9403',
+          image: it.image,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          discountPercent: itemDiscPct,
+          discountAmount: itemDiscAmt,
+          material: it.material,
+          dimensions: it.dimensions,
+          sku: it.sku,
+          total: itemTot,
+        }
+      })),
       proposal.subtotal,
       proposal.discountAmount || 0,
       proposal.deliveryFee,
-      9.0,
+      req.body?.cgstRate || 9.0,
       cgstAmount,
-      9.0,
+      req.body?.sgstRate || 9.0,
       sgstAmount,
       totalTax,
       grandTotal,
-      0,
-      grandTotal,
-      JSON.stringify([]),
-      `Generated from Commercial Proposal ${proposal.proposalNumber}. ${proposal.notes || ''}`,
+      req.body?.amountPaid || 0,
+      req.body?.balanceDue !== undefined ? req.body.balanceDue : grandTotal,
+      JSON.stringify(req.body?.paymentRecords || []),
+      req.body?.notes || `Generated from Commercial Proposal ${proposal.proposalNumber}. ${proposal.notes || ''}`,
     ]
 
     const newInvRes = await pool.query(invoiceQuery, invoiceValues)
     const newInvoice = mapInvoice(newInvRes.rows[0])
 
-    // Update proposal status
+    // Update proposal status if proposal exists in database
     await pool.query(
       'UPDATE proposals SET status = $1, converted_invoice_id = $2, updated_at = NOW() WHERE id = $3',
       ['converted', invId, proposal.id]
-    )
+    ).catch(() => {})
 
     syncEvents.notify('invoices', 'create', newInvoice?.id, newInvoice)
     syncEvents.notify('proposals', 'update', proposal.id, { status: 'converted', convertedInvoiceId: invId })
@@ -355,10 +412,8 @@ proposalsRouter.post('/:id/generate-pdf', async (req, res) => {
     }
 
     let proposal: any = null
-    if (proposalRes.rows.length > 0) {
-      proposal = mapProposal(proposalRes.rows[0])
-    } else if (req.body && (req.body.title || req.body.customerName || req.body.items)) {
-      // If client supplied proposal payload in body, insert/persist it immediately
+    if (req.body && (req.body.title || req.body.customerName || req.body.items)) {
+      // If client supplied proposal payload in body, insert/update and persist it immediately
       const p = req.body
       const preparedFor = p.preparedFor || p.customerName || ''
       const clientPhone = p.clientPhone || p.phone || ''
@@ -377,7 +432,27 @@ proposalsRouter.post('/:id/generate-pdf', async (req, res) => {
           $19, $20, $21,
           NOW(), NOW()
         )
-        ON CONFLICT (id) DO UPDATE SET updated_at = NOW()
+        ON CONFLICT (id) DO UPDATE SET
+          title = EXCLUDED.title,
+          customer_name = EXCLUDED.customer_name,
+          company_name = EXCLUDED.company_name,
+          phone = EXCLUDED.phone,
+          email = EXCLUDED.email,
+          client_gstin = EXCLUDED.client_gstin,
+          delivery_address = EXCLUDED.delivery_address,
+          status = EXCLUDED.status,
+          valid_until = EXCLUDED.valid_until,
+          items = EXCLUDED.items,
+          subtotal = EXCLUDED.subtotal,
+          discount_amount = EXCLUDED.discount_amount,
+          delivery_fee = EXCLUDED.delivery_fee,
+          total = EXCLUDED.total,
+          terms = EXCLUDED.terms,
+          notes = EXCLUDED.notes,
+          prepared_for = EXCLUDED.prepared_for,
+          client_phone = EXCLUDED.client_phone,
+          client_address = EXCLUDED.client_address,
+          updated_at = NOW()
         RETURNING *`,
         [
           id,
@@ -404,6 +479,8 @@ proposalsRouter.post('/:id/generate-pdf', async (req, res) => {
         ]
       )
       proposal = mapProposal(insertRes.rows[0])
+    } else if (proposalRes.rows.length > 0) {
+      proposal = mapProposal(proposalRes.rows[0])
     }
 
     if (!proposal) {

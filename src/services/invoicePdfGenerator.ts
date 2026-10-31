@@ -14,6 +14,8 @@ export interface InvoicePdfItem {
   hsnCode?: string
   quantity: number
   unitPrice: number
+  discountPercent?: number
+  discountAmount?: number
   material?: string
   dimensions?: string
   sku?: string
@@ -513,24 +515,28 @@ export async function generateInvoicePdfBuffer(
     /* ==========================================================================
        BANK DETAILS SECTION (as requested below products details)
        ========================================================================== */
-    .bottom-layout-table {
+    .bottom-layout-container {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 16px;
       width: 100%;
-      border-collapse: collapse;
       page-break-inside: avoid;
-      margin-top: 8px;
-    }
-
-    .bank-card-container {
-      width: 58%;
-      vertical-align: top;
-      padding-right: 14px;
+      margin-top: 10px;
+      box-sizing: border-box;
     }
 
     .bank-card {
+      flex: 1.35;
+      width: 58%;
+      box-sizing: border-box;
       background: #f8fafc;
       border: 1.5px solid #cbd5e1;
       border-radius: 8px;
       padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
     }
 
     .bank-card-title {
@@ -567,6 +573,10 @@ export async function generateInvoicePdfBuffer(
       flex-direction: column;
     }
 
+    .bank-grid-full {
+      grid-column: span 2;
+    }
+
     .bank-label {
       font-size: 9px;
       font-weight: 600;
@@ -583,23 +593,17 @@ export async function generateInvoicePdfBuffer(
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
 
-    .signatory-container {
-      width: 42%;
-      vertical-align: top;
-      text-align: right;
-      padding-left: 14px;
-    }
-
     .signatory-box {
+      flex: 1;
+      width: 42%;
+      box-sizing: border-box;
       border: 1px dashed #cbd5e1;
       border-radius: 8px;
       padding: 12px 14px;
       background: #ffffff;
-      height: 100%;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: 110px;
       text-align: right;
     }
 
@@ -611,8 +615,27 @@ export async function generateInvoicePdfBuffer(
       letter-spacing: 0.5px;
     }
 
+    .sign-middle {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-height: 48px;
+      margin: 4px 0;
+    }
+
+    .sign-img {
+      max-height: 52px;
+      max-width: 140px;
+      object-fit: contain;
+    }
+
     .sign-space {
       height: 48px;
+    }
+
+    .sign-bottom {
+      margin-top: auto;
     }
 
     .sign-line {
@@ -746,6 +769,7 @@ export async function generateInvoicePdfBuffer(
           <th class="center" style="width: 60px;">HSN/SAC</th>
           <th class="center" style="width: 45px;">Qty</th>
           <th class="right" style="width: 85px;">Unit Rate</th>
+          <th class="center" style="width: 55px;">Disc (%)</th>
           <th class="right" style="width: 85px;">Taxable</th>
           <th class="right" style="width: 95px;">Total (₹)</th>
         </tr>
@@ -753,14 +777,25 @@ export async function generateInvoicePdfBuffer(
       <tbody>
         ${items.length === 0 ? `
           <tr>
-            <td colspan="7" class="center" style="padding: 16px; color: #64748b;">
+            <td colspan="8" class="center" style="padding: 16px; color: #64748b;">
               No line items specified.
             </td>
           </tr>
         ` : items.map((item, idx) => {
           const qty = Number(item.quantity) || 1
           const rate = Number(item.unitPrice) || 0
-          const itemSubtotal = Number(item.total) || (qty * rate)
+          const gross = qty * rate
+          const itemSubtotal = Number(item.total) || gross
+          const discAmt = (item.discountAmount !== undefined && Number(item.discountAmount) > 0)
+            ? Number(item.discountAmount)
+            : Math.max(0, gross - itemSubtotal)
+          const discPct = item.discountPercent
+            ? Number(item.discountPercent)
+            : (gross > 0 && discAmt > 0
+                ? Math.round((discAmt / gross) * 100)
+                : (discountAmount > 0 && subtotal > 0
+                    ? Math.round((discountAmount / subtotal) * 100)
+                    : 0))
           const withGst = itemSubtotal * 1.18
           return `
             <tr>
@@ -775,7 +810,11 @@ export async function generateInvoicePdfBuffer(
               <td class="center font-mono" style="color: #475569;">${item.hsnCode || '9403'}</td>
               <td class="center font-mono" style="font-weight: 700; color: #0f172a;">${qty}</td>
               <td class="right font-mono">${formatCurrency(rate)}</td>
-              <td class="right font-mono">${formatCurrency(itemSubtotal)}</td>
+              <td class="center font-mono" style="color: #16a34a; font-weight: 600;">${discPct ? `${discPct}%` : '—'}</td>
+              <td class="right font-mono">
+                ${formatCurrency(itemSubtotal)}
+                ${discAmt > 0 ? `<div style="font-size: 8px; color: #16a34a;">-₹${discAmt.toLocaleString('en-IN')}</div>` : ''}
+              </td>
               <td class="right font-mono" style="font-weight: 700; color: #0f172a;">${formatCurrency(withGst)}</td>
             </tr>
           `
@@ -823,65 +862,61 @@ export async function generateInvoicePdfBuffer(
     </div>
 
     <!-- 4. BANK DETAILS & AUTHORIZED SIGNATORY -->
-    <table class="bottom-layout-table">
-      <tr>
-        <!-- Bank Details Box -->
-        <td class="bank-card-container">
-          <div class="bank-card">
-            <div class="bank-card-title">
-              <span>BANK DETAILS FOR PAYMENT</span>
-              <span class="bank-badge">RTGS / NEFT / IMPS</span>
-            </div>
-            <div class="bank-grid">
-              <div class="bank-grid-item">
-                <span class="bank-label">Bank Name</span>
-                <span class="bank-value">${activeBank.bankName}</span>
-              </div>
-              <div class="bank-grid-item">
-                <span class="bank-label">Account Name (Beneficiary)</span>
-                <span class="bank-value">${activeBank.accountName}</span>
-              </div>
-              <div class="bank-grid-item">
-                <span class="bank-label">Account Number</span>
-                <span class="bank-value">${activeBank.accountNumber}</span>
-              </div>
-              <div class="bank-grid-item">
-                <span class="bank-label">IFSC Code</span>
-                <span class="bank-value">${activeBank.ifscCode}</span>
-              </div>
-              ${activeBank.branch ? `
-              <div class="bank-grid-item">
-                <span class="bank-label">Branch</span>
-                <span class="bank-value" style="font-size: 10px;">${activeBank.branch}</span>
-              </div>` : ''}
-              ${activeBank.upiId ? `
-              <div class="bank-grid-item">
-                <span class="bank-label">UPI ID</span>
-                <span class="bank-value">${activeBank.upiId}</span>
-              </div>` : ''}
-            </div>
+    <div class="bottom-layout-container">
+      <!-- Bank Details Box -->
+      <div class="bank-card">
+        <div>
+          <div class="bank-card-title">
+            <span>BANK DETAILS FOR PAYMENT</span>
+            <span class="bank-badge">RTGS / NEFT / IMPS</span>
           </div>
-        </td>
+          <div class="bank-grid">
+            <div class="bank-grid-item">
+              <span class="bank-label">Bank Name</span>
+              <span class="bank-value">${activeBank.bankName}</span>
+            </div>
+            <div class="bank-grid-item">
+              <span class="bank-label">Account Name (Beneficiary)</span>
+              <span class="bank-value">${activeBank.accountName}</span>
+            </div>
+            <div class="bank-grid-item">
+              <span class="bank-label">Account Number</span>
+              <span class="bank-value">${activeBank.accountNumber}</span>
+            </div>
+            <div class="bank-grid-item">
+              <span class="bank-label">IFSC Code</span>
+              <span class="bank-value">${activeBank.ifscCode}</span>
+            </div>
+            ${activeBank.branch ? `
+            <div class="bank-grid-item bank-grid-full">
+              <span class="bank-label">Branch</span>
+              <span class="bank-value" style="font-size: 10px;">${activeBank.branch}</span>
+            </div>` : ''}
+            ${activeBank.upiId ? `
+            <div class="bank-grid-item bank-grid-full">
+              <span class="bank-label">UPI ID</span>
+              <span class="bank-value">${activeBank.upiId}</span>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>
 
-        <!-- Authorized Signatory -->
-        <td class="signatory-container">
-          <div class="signatory-box">
-            <div class="sign-for">For ${companyName}</div>
-            ${signatureUrl ? `
-              <div style="height: 48px; display: flex; align-items: center; justify-content: flex-end; margin: 4px 0;">
-                <img src="${signatureUrl}" alt="Authorized Signature" style="max-height: 46px; max-width: 140px; object-fit: contain;" />
-              </div>
-            ` : `
-              <div class="sign-space"></div>
-            `}
-            <div>
-              <div class="sign-line"></div>
-              <div class="sign-title">Authorized Signatory</div>
-            </div>
-          </div>
-        </td>
-      </tr>
-    </table>
+      <!-- Authorized Signatory -->
+      <div class="signatory-box">
+        <div class="sign-for">For ${companyName}</div>
+        <div class="sign-middle">
+          ${signatureUrl ? `
+            <img src="${signatureUrl}" alt="Authorized Signature" class="sign-img" />
+          ` : `
+            <div class="sign-space"></div>
+          `}
+        </div>
+        <div class="sign-bottom">
+          <div class="sign-line"></div>
+          <div class="sign-title">Authorized Signatory</div>
+        </div>
+      </div>
+    </div>
 
     <!-- FOOTER / TERMS -->
     <div class="footer-note">
