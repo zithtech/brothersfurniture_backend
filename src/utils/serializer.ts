@@ -161,5 +161,86 @@ export function mapSettings(row: any) {
     standardDeliveryFee: parseFloat(row.standard_delivery_fee),
     bannerAnnouncement: row.banner_announcement,
     isBannerActive: row.is_banner_active,
+    bankAccounts: Array.isArray(row.bank_accounts) ? row.bank_accounts : (typeof row.bank_accounts === 'string' ? JSON.parse(row.bank_accounts) : []),
+    signatureUrl: row.signature_url || undefined,
   }
 }
+
+export function mapProposal(row: any) {
+  if (!row) return null
+  const subtotal = parseFloat(row.subtotal || 0)
+  const discountAmount = parseFloat(row.discount_amount || 0)
+  const deliveryFee = parseFloat(row.delivery_fee || 0)
+  const taxAmount = Math.max(0, Math.round((subtotal - discountAmount) * 0.18))
+  const total = parseFloat(row.total || (subtotal - discountAmount + deliveryFee + taxAmount))
+
+  return {
+    id: row.id,
+    proposalNumber: row.proposal_number,
+    title: row.title || 'Commercial Fit-Out Scope',
+    preparedFor: row.prepared_for || row.customer_name || '',
+    customerName: row.customer_name || row.prepared_for || '',
+    companyName: row.company_name || undefined,
+    phone: row.phone || row.client_phone || '',
+    clientPhone: row.client_phone || row.phone || '',
+    email: row.email || '',
+    clientGstin: row.client_gstin || undefined,
+    deliveryAddress: row.delivery_address || row.client_address || '',
+    clientAddress: row.client_address || row.delivery_address || '',
+    status: row.status || 'draft',
+    validUntil: row.valid_until || 'Within 30 Days',
+    items: Array.isArray(row.items) ? row.items : (typeof row.items === 'string' ? JSON.parse(row.items) : []),
+    subtotal,
+    discountAmount,
+    deliveryFee,
+    taxRate: 18,
+    taxAmount,
+    total,
+    terms: row.terms || undefined,
+    notes: row.notes || undefined,
+    pdfUrl: row.pdf_url || undefined,
+    r2Key: row.r2_key || undefined,
+    convertedInvoiceId: row.converted_invoice_id || undefined,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+  }
+}
+
+export function mapInvoice(row: any) {
+  if (!row) return null
+  return {
+    id: row.id,
+    invoiceNumber: row.invoice_number,
+    proposalRef: row.proposal_ref || undefined,
+    customerName: row.customer_name,
+    companyName: row.company_name || undefined,
+    phone: row.phone,
+    email: row.email,
+    clientGstin: row.client_gstin || undefined,
+    billingAddress: row.billing_address,
+    shippingAddress: row.shipping_address,
+    poNumber: row.po_number || undefined,
+    issueDate: row.issue_date,
+    dueDate: row.due_date,
+    status: row.status,
+    items: Array.isArray(row.items) ? row.items : (typeof row.items === 'string' ? JSON.parse(row.items) : []),
+    subtotal: parseFloat(row.subtotal || 0),
+    discountAmount: parseFloat(row.discount_amount || 0),
+    deliveryFee: parseFloat(row.delivery_fee || 0),
+    cgstRate: parseFloat(row.cgst_rate || 9.0),
+    cgstAmount: parseFloat(row.cgst_amount || 0),
+    sgstRate: parseFloat(row.sgst_rate || 9.0),
+    sgstAmount: parseFloat(row.sgst_amount || 0),
+    taxAmount: parseFloat(row.tax_amount || 0),
+    total: parseFloat(row.total || 0),
+    amountPaid: parseFloat(row.amount_paid || 0),
+    balanceDue: parseFloat(row.balance_due || 0),
+    paymentRecords: Array.isArray(row.payment_records) ? row.payment_records : (typeof row.payment_records === 'string' ? JSON.parse(row.payment_records) : []),
+    notes: row.notes || undefined,
+    pdfUrl: row.pdf_url || undefined,
+    r2Key: row.r2_key || undefined,
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString(),
+    updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : undefined,
+  }
+}
+

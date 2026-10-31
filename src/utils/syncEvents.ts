@@ -1,8 +1,8 @@
 import { EventEmitter } from 'events'
 
 export interface SyncEventPayload {
-  entity: 'products' | 'chairs' | 'clients' | 'testimonials' | 'settings' | 'orders' | 'leads' | 'all'
-  action: 'create' | 'update' | 'delete' | 'toggle-stock' | 'toggle-featured' | 'toggle-production' | 'reset'
+  entity: 'products' | 'chairs' | 'clients' | 'testimonials' | 'settings' | 'orders' | 'leads' | 'proposals' | 'invoices' | 'all'
+  action: 'create' | 'update' | 'delete' | 'payment' | 'toggle-stock' | 'toggle-featured' | 'toggle-production' | 'reset'
   id?: string
   data?: any
   timestamp?: string
