@@ -291,28 +291,129 @@ invoicesRouter.post('/:id/payments', async (req, res) => {
   }
 })
 
+// Helper function to upsert invoice from request fallback body if missing from database
+async function upsertInvoiceFallback(id: string, inv: any) {
+  const subtotal = Number(inv.subtotal) || 0
+  const discountAmount = Number(inv.discountAmount) || 0
+  const deliveryFee = Number(inv.deliveryFee) || 0
+  const taxableSubtotal = Math.max(0, subtotal - discountAmount)
+  const cgstAmount = Number(inv.cgstAmount) || Math.round(taxableSubtotal * 0.09)
+  const sgstAmount = Number(inv.sgstAmount) || Math.round(taxableSubtotal * 0.09)
+  const totalTax = cgstAmount + sgstAmount
+  const total = Number(inv.total) || (taxableSubtotal + deliveryFee + totalTax)
+  const amountPaid = Number(inv.amountPaid) || 0
+  const balanceDue = Number(inv.balanceDue) !== undefined ? Number(inv.balanceDue) : Math.max(0, total - amountPaid)
+
+  const insertRes = await pool.query(
+    `INSERT INTO invoices (
+      id, invoice_number, proposal_ref, customer_name, company_name, phone,
+      email, client_gstin, billing_address, shipping_address, po_number,
+      issue_date, due_date, status, items, subtotal, discount_amount,
+      delivery_fee, cgst_rate, cgst_amount, sgst_rate, sgst_amount,
+      tax_amount, total, amount_paid, balance_due, payment_records, notes,
+      created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6,
+      $7, $8, $9, $10, $11,
+      $12, $13, $14, $15, $16, $17,
+      $18, $19, $20, $21, $22,
+      $23, $24, $25, $26, $27, $28,
+      NOW(), NOW()
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      customer_name = EXCLUDED.customer_name,
+      company_name = EXCLUDED.company_name,
+      phone = EXCLUDED.phone,
+      email = EXCLUDED.email,
+      client_gstin = EXCLUDED.client_gstin,
+      billing_address = EXCLUDED.billing_address,
+      shipping_address = EXCLUDED.shipping_address,
+      po_number = EXCLUDED.po_number,
+      issue_date = EXCLUDED.issue_date,
+      due_date = EXCLUDED.due_date,
+      status = EXCLUDED.status,
+      items = EXCLUDED.items,
+      subtotal = EXCLUDED.subtotal,
+      discount_amount = EXCLUDED.discount_amount,
+      delivery_fee = EXCLUDED.delivery_fee,
+      cgst_rate = EXCLUDED.cgst_rate,
+      cgst_amount = EXCLUDED.cgst_amount,
+      sgst_rate = EXCLUDED.sgst_rate,
+      sgst_amount = EXCLUDED.sgst_amount,
+      tax_amount = EXCLUDED.tax_amount,
+      total = EXCLUDED.total,
+      amount_paid = EXCLUDED.amount_paid,
+      balance_due = EXCLUDED.balance_due,
+      notes = EXCLUDED.notes,
+      updated_at = NOW()
+    RETURNING *`,
+    [
+      id,
+      inv.invoiceNumber || `BF-INV-2026-${id.slice(-4)}`,
+      inv.proposalRef || null,
+      inv.customerName || 'Direct Commercial Client',
+      inv.companyName || null,
+      inv.phone || '',
+      inv.email || '',
+      inv.clientGstin || null,
+      inv.billingAddress || '',
+      inv.shippingAddress || '',
+      inv.poNumber || null,
+      inv.issueDate || new Date().toISOString().split('T')[0],
+      inv.dueDate || new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      inv.status || 'pending',
+      JSON.stringify(inv.items || []),
+      subtotal,
+      discountAmount,
+      deliveryFee,
+      inv.cgstRate || 9.0,
+      cgstAmount,
+      inv.sgstRate || 9.0,
+      sgstAmount,
+      totalTax,
+      total,
+      amountPaid,
+      balanceDue,
+      JSON.stringify(inv.paymentRecords || []),
+      inv.notes || null,
+    ]
+  )
+  return mapInvoice(insertRes.rows[0])
+}
+
 // Generate PDF for existing invoice and upload to Cloudflare R2
 invoicesRouter.post('/:id/generate-pdf', async (req, res) => {
   try {
     const { id } = req.params
 
-    let invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1', [id])
-    if (invoiceRes.rows.length === 0) {
-      // Retry loop: wait up to 1.5s in case createInvoice is running concurrently
-      for (let i = 0; i < 3; i++) {
-        await new Promise((r) => setTimeout(r, 500))
-        invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1', [id])
-        if (invoiceRes.rows.length > 0) break
+    let invoice: any = null
+
+    // If client supplied updated invoice payload in body (e.g. after adding products), persist and use immediately
+    if (req.body && (req.body.invoiceNumber || req.body.customerName || req.body.items)) {
+      try {
+        invoice = await upsertInvoiceFallback(id, req.body)
+      } catch (upsertErr) {
+        console.warn('Fallback invoice upsert warning in generate-pdf:', upsertErr)
       }
     }
 
-    if (invoiceRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Invoice not found' })
+    if (!invoice) {
+      let invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1 OR invoice_number = $1', [id])
+      if (invoiceRes.rows.length === 0) {
+        // Retry loop: wait up to 1.5s in case createInvoice is running concurrently
+        for (let i = 0; i < 3; i++) {
+          await new Promise((r) => setTimeout(r, 400))
+          invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1 OR invoice_number = $1', [id])
+          if (invoiceRes.rows.length > 0) break
+        }
+      }
+      if (invoiceRes.rows.length > 0) {
+        invoice = mapInvoice(invoiceRes.rows[0])
+      }
     }
 
-    const invoice = mapInvoice(invoiceRes.rows[0])
     if (!invoice) {
-      return res.status(404).json({ error: 'Failed to parse invoice data' })
+      return res.status(404).json({ error: 'Invoice not found' })
     }
 
     // Fetch company settings to pass current address, GSTIN and active bank details
@@ -337,11 +438,11 @@ invoicesRouter.post('/:id/generate-pdf', async (req, res) => {
        SET pdf_url = $1, r2_key = $2, updated_at = NOW() 
        WHERE id = $3 
        RETURNING *`,
-      [r2Result.url, r2Result.key, id]
+      [r2Result.url, r2Result.key, invoice.id]
     )
 
     const updatedInvoice = mapInvoice(updateRes.rows[0])
-    syncEvents.notify('invoices', 'update', id, updatedInvoice)
+    syncEvents.notify('invoices', 'update', invoice.id, updatedInvoice)
 
     res.json({
       success: true,
@@ -356,17 +457,31 @@ invoicesRouter.post('/:id/generate-pdf', async (req, res) => {
   }
 })
 
-// Direct file download endpoint with Content-Disposition: attachment
-invoicesRouter.get('/:id/download-pdf', async (req, res) => {
+// Direct file download handler with Content-Disposition: attachment
+const handleInvoiceDownload = async (req: any, res: any) => {
   try {
     const { id } = req.params
-    const invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1', [id])
+    let invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1 OR invoice_number = $1', [id])
     if (invoiceRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Invoice not found' })
+      for (let i = 0; i < 3; i++) {
+        await new Promise((r) => setTimeout(r, 400))
+        invoiceRes = await pool.query('SELECT * FROM invoices WHERE id = $1 OR invoice_number = $1', [id])
+        if (invoiceRes.rows.length > 0) break
+      }
     }
-    const invoice = mapInvoice(invoiceRes.rows[0])
+
+    let invoice: any = invoiceRes.rows.length > 0 ? mapInvoice(invoiceRes.rows[0]) : null
+
+    if (!invoice && req.body && (req.body.invoiceNumber || req.body.customerName || req.body.items)) {
+      try {
+        invoice = await upsertInvoiceFallback(id, req.body)
+      } catch (upsertErr) {
+        console.warn('Fallback invoice upsert warning in download-pdf:', upsertErr)
+      }
+    }
+
     if (!invoice) {
-      return res.status(404).json({ error: 'Failed to parse invoice data' })
+      return res.status(404).json({ error: 'Invoice not found' })
     }
 
     const fileName = `${invoice.invoiceNumber || 'invoice'}.pdf`
@@ -399,7 +514,10 @@ invoicesRouter.get('/:id/download-pdf', async (req, res) => {
     console.error('Download invoice error:', err)
     res.status(500).json({ error: err.message || 'Failed to download invoice PDF' })
   }
-})
+}
+
+invoicesRouter.get('/:id/download-pdf', handleInvoiceDownload)
+invoicesRouter.post('/:id/download-pdf', handleInvoiceDownload)
 
 // Generate PDF on-the-fly and upload to Cloudflare R2
 invoicesRouter.post('/generate-pdf', async (req, res) => {
