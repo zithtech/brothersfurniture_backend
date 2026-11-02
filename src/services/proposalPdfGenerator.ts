@@ -2,6 +2,7 @@ import puppeteer from 'puppeteer'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { launchPuppeteerBrowser } from '../utils/puppeteerHelper.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -2596,16 +2597,7 @@ export async function generateProposalPdfBuffer(proposal: ProposalPdfData): Prom
 </html>
   `
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--font-render-hinting=medium',
-    ],
-  })
+  const browser = await launchPuppeteerBrowser()
 
   try {
     const page = await browser.newPage()
