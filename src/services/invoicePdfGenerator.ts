@@ -230,7 +230,7 @@ export async function generateInvoicePdfBuffer(
     .invoice-title {
       font-size: 26px;
       font-weight: 900;
-      color: #0f172a;
+      color: #2563eb;
       letter-spacing: -0.5px;
       text-transform: uppercase;
       line-height: 1.1;
@@ -265,7 +265,7 @@ export async function generateInvoicePdfBuffer(
     }
 
     .invoice-meta-val.highlight {
-      color: #ea580c;
+      color: #0f172a;
     }
 
     .logo-img {
@@ -283,7 +283,7 @@ export async function generateInvoicePdfBuffer(
 
     .logo-badge {
       display: inline-block;
-      background: #ea580c;
+      background: #2563eb;
       color: #ffffff;
       font-weight: 900;
       font-size: 18px;
@@ -327,7 +327,7 @@ export async function generateInvoicePdfBuffer(
     .party-card {
       width: 50%;
       vertical-align: top;
-      background: #f8fafc;
+      background: transparent;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
       padding: 12px 14px;
@@ -336,12 +336,11 @@ export async function generateInvoicePdfBuffer(
     .party-title {
       font-size: 10px;
       font-weight: 800;
-      color: #475569;
+      color: #2563eb;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin-bottom: 6px;
       padding-bottom: 4px;
-      border-bottom: 1px dashed #cbd5e1;
     }
 
     .party-name {
@@ -377,24 +376,33 @@ export async function generateInvoicePdfBuffer(
     .section-heading {
       font-size: 11px;
       font-weight: 800;
-      color: #0f172a;
+      color: #2563eb;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin-bottom: 8px;
     }
 
+    .items-table-container {
+      width: 100%;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      box-sizing: border-box;
+      background: #ffffff;
+    }
+
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 16px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      overflow: hidden;
+      margin-bottom: 0;
+      border: none;
     }
 
     .items-table th {
-      background: #0f172a;
-      color: #ffffff;
+      background: transparent;
+      color: #1e293b;
+      border-bottom: 2px solid #cbd5e1;
       font-size: 9.5px;
       font-weight: 700;
       text-transform: uppercase;
@@ -418,6 +426,10 @@ export async function generateInvoicePdfBuffer(
       border-bottom: 1px solid #e2e8f0;
       vertical-align: top;
       font-size: 10.5px;
+    }
+
+    .items-table tbody tr:last-child td {
+      border-bottom: none;
     }
 
     .items-table tbody tr:nth-child(even) {
@@ -497,7 +509,7 @@ export async function generateInvoicePdfBuffer(
     }
 
     .totals-table tr.grand-total td.val {
-      color: #ea580c;
+      color: #2563eb;
       font-size: 13.5px;
       font-weight: 900;
     }
@@ -509,7 +521,7 @@ export async function generateInvoicePdfBuffer(
     }
 
     .totals-table tr.balance td.val {
-      color: #b45309;
+      color: #2563eb;
       font-weight: 800;
     }
 
@@ -531,7 +543,7 @@ export async function generateInvoicePdfBuffer(
       flex: 1.35;
       width: 58%;
       box-sizing: border-box;
-      background: #f8fafc;
+      background: transparent;
       border: 1.5px solid #cbd5e1;
       border-radius: 8px;
       padding: 12px 14px;
@@ -543,7 +555,7 @@ export async function generateInvoicePdfBuffer(
     .bank-card-title {
       font-size: 10.5px;
       font-weight: 800;
-      color: #0f172a;
+      color: #2563eb;
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin-bottom: 8px;
@@ -598,7 +610,7 @@ export async function generateInvoicePdfBuffer(
       flex: 1;
       width: 42%;
       box-sizing: border-box;
-      border: 1px dashed #cbd5e1;
+      border: 1px solid #cbd5e1;
       border-radius: 8px;
       padding: 12px 14px;
       background: #ffffff;
@@ -611,7 +623,7 @@ export async function generateInvoicePdfBuffer(
     .sign-for {
       font-size: 10px;
       font-weight: 700;
-      color: #334155;
+      color: #2563eb;
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -762,7 +774,8 @@ export async function generateInvoicePdfBuffer(
 
     <!-- 3. PRODUCTS DETAILS -->
     <div class="section-heading">PRODUCTS DETAILS (TAX INVOICE SCHEDULE)</div>
-    <table class="items-table">
+    <div class="items-table-container">
+      <table class="items-table">
       <thead>
         <tr>
           <th class="center" style="width: 32px;">#</th>
@@ -811,10 +824,10 @@ export async function generateInvoicePdfBuffer(
               <td class="center font-mono" style="color: #475569;">${item.hsnCode || '9403'}</td>
               <td class="center font-mono" style="font-weight: 700; color: #0f172a;">${qty}</td>
               <td class="right font-mono">${formatCurrency(rate)}</td>
-              <td class="center font-mono" style="color: #16a34a; font-weight: 600;">${discPct ? `${discPct}%` : '—'}</td>
+              <td class="center font-mono" style="color: #475569; font-weight: 600;">${discPct ? `${discPct}%` : '—'}</td>
               <td class="right font-mono">
                 ${formatCurrency(itemSubtotal)}
-                ${discAmt > 0 ? `<div style="font-size: 8px; color: #16a34a;">-₹${discAmt.toLocaleString('en-IN')}</div>` : ''}
+                ${discAmt > 0 ? `<div style="font-size: 8px; color: #64748b;">-₹${discAmt.toLocaleString('en-IN')}</div>` : ''}
               </td>
               <td class="right font-mono" style="font-weight: 700; color: #0f172a;">${formatCurrency(withGst)}</td>
             </tr>
@@ -822,6 +835,7 @@ export async function generateInvoicePdfBuffer(
         }).join('')}
       </tbody>
     </table>
+    </div>
 
     <!-- FINANCIAL TOTALS BREAKDOWN -->
     <div class="totals-container">
@@ -833,7 +847,7 @@ export async function generateInvoicePdfBuffer(
         ${discountAmount > 0 ? `
         <tr>
           <td class="label">Commercial Discount:</td>
-          <td class="val" style="color: #16a34a;">-${formatCurrency(discountAmount)}</td>
+          <td class="val" style="color: #475569;">-${formatCurrency(discountAmount)}</td>
         </tr>` : ''}
         <tr>
           <td class="label">Central GST (CGST 9%):</td>
@@ -845,15 +859,15 @@ export async function generateInvoicePdfBuffer(
         </tr>
         <tr>
           <td class="label">Freight &amp; Assembly Fee:</td>
-          <td class="val">${deliveryFee === 0 ? '<span style="color: #16a34a; font-weight: 700;">FREE</span>' : formatCurrency(deliveryFee)}</td>
+          <td class="val">${deliveryFee === 0 ? '<span style="color: #334155; font-weight: 700;">FREE</span>' : formatCurrency(deliveryFee)}</td>
         </tr>
         <tr class="grand-total">
           <td class="label">Total Amount:</td>
           <td class="val">${formatCurrency(total)}</td>
         </tr>
         <tr>
-          <td class="label" style="color: #16a34a; font-weight: 600;">Amount Paid:</td>
-          <td class="val" style="color: #16a34a;">${formatCurrency(amountPaid)}</td>
+          <td class="label" style="color: #475569; font-weight: 600;">Amount Paid:</td>
+          <td class="val" style="color: #334155;">${formatCurrency(amountPaid)}</td>
         </tr>
         <tr class="balance">
           <td class="label">Balance Due:</td>
