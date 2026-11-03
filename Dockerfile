@@ -1,9 +1,9 @@
-# Production Dockerfile for Dokploy with Puppeteer & Chromium Support
 FROM node:20-bookworm-slim
 
-# Install system dependencies, Chromium, and standard fonts for PDF generation
+# Install Chromium and required dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
+    unzip \
     fonts-liberation \
     fonts-noto-color-emoji \
     fonts-freefont-ttf \
@@ -14,19 +14,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use the system Chromium package instead of downloading
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV NODE_ENV=production
-ENV PORT=5000
+# Check Chromium installation
+RUN which chromium && chromium --version
 
 WORKDIR /app
 
-# Copy package descriptors first to leverage Docker layer caching
+# Prevent Puppeteer from downloading Chrome
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+ENV NODE_ENV=production
+ENV PORT=5000
+
+# Copy package files
 COPY package*.json ./
 
-# Install dependencies (including tsx for running src/index.ts)
-RUN npm install
+# Install dependencies
+RUN npm ci --omit=dev
 
 # Copy application source
 COPY . .

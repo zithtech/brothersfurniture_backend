@@ -78,27 +78,16 @@ function findSystemChromium(): string | undefined {
 }
 
 export function getPuppeteerLaunchOptions(): LaunchOptions {
-  const executablePath = findSystemChromium()
-
-  const args = [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--no-first-run',
-    '--no-zygote',
-    '--font-render-hinting=medium',
-  ]
-
-  // In Docker / Dokploy containers with limited memory, single-process helps stability
-  if (process.env.DOCKER_CONTAINER || process.platform === 'linux') {
-    args.push('--single-process')
-  }
-
   return {
     headless: true,
-    ...(executablePath ? { executablePath } : {}),
-    args,
+    executablePath: '/usr/bin/chromium',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+    ],
   }
 }
 

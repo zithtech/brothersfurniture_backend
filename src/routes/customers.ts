@@ -7,6 +7,7 @@ import {
   mapCustomerNote,
   mapCustomerActivityLog,
   mapOrder,
+  mapInvoice,
 } from '../utils/serializer.js'
 import { syncEvents } from '../utils/syncEvents.js'
 
@@ -591,12 +592,64 @@ customersRouter.get('/:id', async (req, res) => {
       orders = ordersRes.rows.map(mapOrder).filter(Boolean)
     }
 
+    // Fetch matching invoices from invoices table
+    const invoiceConditions: string[] = []
+    const invoiceValues: any[] = []
+
+    if (customerRow.company_name) {
+      invoiceValues.push(`%${customerRow.company_name}%`)
+      invoiceConditions.push(`(company_name ILIKE $${invoiceValues.length} OR customer_name ILIKE $${invoiceValues.length})`)
+    }
+    if (customerRow.company_phone) {
+      const rawDigits = customerRow.company_phone.replace(/\D/g, '').slice(-10)
+      if (rawDigits) {
+        invoiceValues.push(`%${rawDigits}%`)
+        invoiceConditions.push(`phone LIKE $${invoiceValues.length}`)
+      }
+    }
+    if (customerRow.company_email) {
+      invoiceValues.push(customerRow.company_email.toLowerCase())
+      invoiceConditions.push(`LOWER(email) = $${invoiceValues.length}`)
+    }
+    if (customerRow.gst_number) {
+      invoiceValues.push(customerRow.gst_number)
+      invoiceConditions.push(`client_gstin ILIKE $${invoiceValues.length}`)
+    }
+
+    if (contactsRes.rows.length > 0) {
+      for (const ct of contactsRes.rows) {
+        if (ct.name) {
+          invoiceValues.push(`%${ct.name}%`)
+          invoiceConditions.push(`customer_name ILIKE $${invoiceValues.length}`)
+        }
+        if (ct.phone) {
+          const rawCtDigits = ct.phone.replace(/\D/g, '').slice(-10)
+          if (rawCtDigits) {
+            invoiceValues.push(`%${rawCtDigits}%`)
+            invoiceConditions.push(`phone LIKE $${invoiceValues.length}`)
+          }
+        }
+        if (ct.email) {
+          invoiceValues.push(ct.email.toLowerCase())
+          invoiceConditions.push(`LOWER(email) = $${invoiceValues.length}`)
+        }
+      }
+    }
+
+    let invoices: any[] = []
+    if (invoiceConditions.length > 0) {
+      const invoiceSql = `SELECT * FROM invoices WHERE (${invoiceConditions.join(' OR ')}) ORDER BY created_at DESC LIMIT 50`
+      const invoicesRes = await pool.query(invoiceSql, invoiceValues)
+      invoices = invoicesRes.rows
+    }
+
     const mapped = mapCustomer(customerRow, {
       contacts: contactsRes.rows,
       addresses: addressesRes.rows,
       notes: notesRes.rows,
       activityLogs: activityRes.rows,
       orders,
+      invoices,
     })
 
     res.json(mapped)

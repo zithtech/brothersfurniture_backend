@@ -311,7 +311,7 @@ export function mapCustomerActivityLog(row: any) {
   }
 }
 
-export function mapCustomer(row: any, extra?: { contacts?: any[]; addresses?: any[]; notes?: any[]; activityLogs?: any[]; orders?: any[] }) {
+export function mapCustomer(row: any, extra?: { contacts?: any[]; addresses?: any[]; notes?: any[]; activityLogs?: any[]; orders?: any[]; invoices?: any[] }) {
   if (!row) return null
   return {
     id: row.id,
@@ -366,5 +366,6 @@ export function mapCustomer(row: any, extra?: { contacts?: any[]; addresses?: an
     notes: extra?.notes ? extra.notes.map(mapCustomerNote).filter(Boolean) : undefined,
     activityLogs: extra?.activityLogs ? extra.activityLogs.map(mapCustomerActivityLog).filter(Boolean) : undefined,
     orders: extra?.orders || undefined,
+    invoices: extra?.invoices ? extra.invoices.map(mapInvoice).filter(Boolean) : undefined,
   }
 }
